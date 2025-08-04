@@ -13,9 +13,16 @@ from pydantic import BaseModel, Field
 from typing import List, Dict, Optional
 from threading import Event
 
+# --- Import dotenv ---
+from dotenv import load_dotenv
+
 # --- Firebase Admin SDK ---
 import firebase_admin
 from firebase_admin import credentials, firestore
+
+# --- Load Environment Variables ---
+# This will load the variables from your .env file for local development
+load_dotenv()
 
 # --- App Configuration ---
 app = FastAPI(
@@ -26,10 +33,29 @@ app = FastAPI(
 
 # --- Firebase Initialization ---
 try:
-    cred = credentials.Certificate("serviceAccountKey.json")
+    private_key = os.getenv("FIREBASE_PRIVATE_KEY", "").replace('\\n', '\n')
+    
+    cred_dict = {
+        "type": os.getenv("FIREBASE_TYPE"),
+        "project_id": os.getenv("FIREBASE_PROJECT_ID"),
+        "private_key_id": os.getenv("FIREBASE_PRIVATE_KEY_ID"),
+        "private_key": private_key,
+        "client_email": os.getenv("FIREBASE_CLIENT_EMAIL"),
+        "client_id": os.getenv("FIREBASE_CLIENT_ID"),
+        "auth_uri": os.getenv("FIREBASE_AUTH_URI"),
+        "token_uri": os.getenv("FIREBASE_TOKEN_URI"),
+        "auth_provider_x509_cert_url": os.getenv("FIREBASE_AUTH_PROVIDER_X509_CERT_URL"),
+        "client_x509_cert_url": os.getenv("FIREBASE_CLIENT_X509_CERT_URL")
+    }
+    
+    # Check if all required keys are present
+    if not all(cred_dict.values()):
+         raise ValueError("One or more Firebase environment variables are not set. Please check your .env file or hosting configuration.")
+
+    cred = credentials.Certificate(cred_dict)
     firebase_admin.initialize_app(cred)
     db = firestore.client()
-    print("✅ Firestore connection successful.")
+    print("✅ Firestore connection successful from environment variables.")
 except Exception as e:
     print(f"🔥 Firestore connection failed: {e}")
     db = None
@@ -44,9 +70,8 @@ class PollCreate(BaseModel):
     question: str = Field(..., min_length=3, max_length=200)
     options: List[str] = Field(..., min_items=2, max_items=10)
     expiry: str
-    quiz_mode: bool = False # New field for quiz mode
+    quiz_mode: bool = False
 
-# Updated response to include host secret if applicable
 class PollCreateResponse(BaseModel):
     id: str
     host_secret: Optional[str] = None
@@ -92,22 +117,19 @@ def is_poll_expired(poll_data: dict) -> bool:
     return False
 
 # --- API Endpoints ---
-
 @app.post("/api/polls", response_model=PollCreateResponse, status_code=status.HTTP_201_CREATED, tags=["Polls"])
 async def create_poll(poll_data: PollCreate):
     if not db: raise HTTPException(status_code=503, detail="Firestore service is not available.")
     poll_id = str(uuid.uuid4())[:8]
     options_with_ids = [{"id": f"opt_{i+1}", "text": text} for i, text in enumerate(poll_data.options)]
     results = {option["id"]: 0 for option in options_with_ids}
-    
     poll_record = {
         "id": poll_id, "question": poll_data.question, "options": options_with_ids,
         "created_at": datetime.datetime.now(datetime.timezone.utc),
         "expiry_duration": poll_data.expiry, "results": results, "voter_ips": [],
-        "quiz_mode": poll_data.quiz_mode, "results_revealed": False,
+        "quiz_mode": poll_data.quiz_mode, "results_revealed": not poll_data.quiz_mode,
         "host_secret": secrets.token_urlsafe(16) if poll_data.quiz_mode else None
     }
-    
     try:
         db.collection('polls').document(poll_id).set(poll_record)
         return PollCreateResponse(id=poll_id, host_secret=poll_record["host_secret"])
@@ -120,24 +142,18 @@ async def get_poll_data(poll_id: str, request: Request, host_secret: Optional[st
     poll_ref = db.collection('polls').document(poll_id)
     poll_doc = poll_ref.get()
     if not poll_doc.exists: raise HTTPException(status_code=404, detail="Poll not found")
-    
     poll_data = poll_doc.to_dict()
     is_host = poll_data.get("quiz_mode") and poll_data.get("host_secret") == host_secret
-
     poll_data["is_expired"] = is_poll_expired(poll_data)
     client_ip = get_client_ip(request)
     if client_ip in poll_data.get("voter_ips", []):
         poll_data["user_voted"] = "yes"
-
-    # Censor results if it's a quiz and they haven't been revealed to non-hosts
     if poll_data.get("quiz_mode") and not poll_data.get("results_revealed") and not is_host:
         poll_data["results"] = {option["id"]: 0 for option in poll_data["options"]}
-
     return PollData(**poll_data)
 
 @app.post("/api/polls/{poll_id}/vote", status_code=status.HTTP_200_OK, tags=["Polls"])
 async def cast_vote(poll_id: str, vote: VoteRequest, request: Request):
-    # This endpoint remains largely the same
     if not db: raise HTTPException(status_code=503, detail="Firestore service is not available.")
     poll_ref = db.collection('polls').document(poll_id)
     client_ip = get_client_ip(request)
@@ -154,28 +170,20 @@ async def cast_vote(poll_id: str, vote: VoteRequest, request: Request):
     transaction = db.transaction()
     return vote_transaction(transaction, poll_ref, vote.option_id, client_ip)
 
-# --- NEW: Reveal Results Endpoint ---
 @app.post("/api/polls/{poll_id}/reveal", status_code=status.HTTP_200_OK, tags=["Host"])
 async def reveal_results(poll_id: str, action: HostActionRequest):
-    """Allows the host to reveal the results of a quiz mode poll."""
     if not db: raise HTTPException(status_code=503, detail="Firestore service is not available.")
     poll_ref = db.collection('polls').document(poll_id)
     poll_doc = poll_ref.get()
     if not poll_doc.exists: raise HTTPException(status_code=404, detail="Poll not found")
-    
     poll_data = poll_doc.to_dict()
-    if not poll_data.get("quiz_mode"):
-        raise HTTPException(status_code=400, detail="This is not a quiz mode poll.")
-    if poll_data.get("host_secret") != action.host_secret:
-        raise HTTPException(status_code=403, detail="Invalid host secret.")
-
+    if not poll_data.get("quiz_mode"): raise HTTPException(status_code=400, detail="This is not a quiz mode poll.")
+    if poll_data.get("host_secret") != action.host_secret: raise HTTPException(status_code=403, detail="Invalid host secret.")
     poll_ref.update({"results_revealed": True})
     return {"message": "Results have been revealed to participants."}
 
-
 @app.get("/api/polls/{poll_id}/stream", tags=["Polls"])
 async def stream_poll_results(poll_id: str, request: Request, host_secret: Optional[str] = None):
-    # This endpoint is updated to handle censoring for quiz mode
     if not db: raise HTTPException(status_code=503, detail="Firestore service is not available.")
     queue = asyncio.Queue()
     def on_snapshot_callback(doc_snapshot, changes, read_time):
@@ -202,7 +210,6 @@ async def stream_poll_results(poll_id: str, request: Request, host_secret: Optio
 
 @app.get("/api/polls/{poll_id}/export", tags=["Polls"])
 async def export_poll_results(poll_id: str):
-    # This endpoint remains the same
     if not db: raise HTTPException(status_code=503, detail="Firestore service is not available.")
     poll_ref = db.collection('polls').document(poll_id)
     poll_doc = poll_ref.get()
@@ -226,6 +233,5 @@ async def serve_home(): return FileResponse(os.path.join(static_dir, 'index.html
 @app.get("/polls/{poll_id}", response_class=HTMLResponse, tags=["Frontend"])
 async def serve_poll_page(poll_id: str): return FileResponse(os.path.join(static_dir, 'poll.html'))
 
-# NEW: Route for the host control panel
 @app.get("/host/{poll_id}", response_class=HTMLResponse, tags=["Frontend"])
 async def serve_host_page(poll_id: str): return FileResponse(os.path.join(static_dir, 'host.html'))
