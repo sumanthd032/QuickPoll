@@ -10,120 +10,164 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; }
-        .glass-card { background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.2); }
-        .btn-primary { background-color: #4f46e5; transition: background-color 0.3s ease; }
-        .btn-primary:hover { background-color: #4338ca; }
-        .option-input-group { transition: all 0.3s ease; }
-        .form-checkbox { color: #4f46e5; }
-        .link-card { background-color: rgba(0,0,0,0.2); border-left: 4px solid #4f46e5; }
+        .glass-card {
+            background: rgba(30, 41, 59, 0.5);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+        .btn-primary {
+            background-color: #4f46e5;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+        }
+        .btn-primary:hover {
+            background-color: #4338ca;
+            transform: translateY(-2px);
+        }
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+        .form-checkbox:checked {
+            background-color: #4f46e5;
+        }
+        .link-card {
+            background-color: rgba(0,0,0,0.25);
+            border-left: 4px solid #4f46e5;
+        }
+        .copy-btn-feedback {
+            position: absolute;
+            top: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #2dd4bf;
+            color: #1a202c;
+            padding: 4px 12px;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            opacity: 0;
+            transition: opacity 0.3s ease, top 0.3s ease;
+            pointer-events: none;
+        }
+        .copy-btn-feedback.show {
+            opacity: 1;
+            top: -35px;
+        }
     </style>
 </head>
-<body class="bg-gray-900 text-white min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-gray-900 to-indigo-900">
+<body class="bg-gray-900 text-white min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-gray-900 via-indigo-900 to-slate-900">
 
     <div class="w-full max-w-2xl">
         <header class="text-center mb-8">
-            <h1 class="text-4xl md:text-5xl font-bold mb-2">QuickPoll</h1>
+            <h1 class="text-4xl md:text-5xl font-bold mb-2 tracking-tight">QuickPoll</h1>
             <p class="text-lg md:text-xl text-indigo-300">Instant One-Question Poll Creator</p>
         </header>
 
-        <!-- Poll Creation Card -->
-        <main id="poll-creation-card" class="glass-card rounded-2xl shadow-2xl p-6 md:p-8">
-            <form id="create-poll-form">
-                <div class="mb-6">
-                    <label for="question" class="block text-lg font-semibold mb-2 text-indigo-100">Your Question</label>
-                    <input type="text" id="question" name="question" class="w-full bg-gray-800 border-2 border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition" placeholder="e.g., What is the capital of France?" required>
-                </div>
+        <div id="card-container">
+            <!-- Poll Creation Card -->
+            <main id="poll-creation-card" class="glass-card rounded-2xl shadow-2xl p-6 md:p-8">
+                <form id="create-poll-form">
+                    <div class="mb-6">
+                        <label for="question" class="block text-lg font-semibold mb-2 text-indigo-100">Your Question</label>
+                        <input type="text" id="question" name="question" class="w-full bg-slate-800 border-2 border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition" placeholder="e.g., What is the capital of France?" required>
+                    </div>
 
-                <div class="mb-6">
-                    <label class="block text-lg font-semibold mb-2 text-indigo-100">Options</label>
-                    <div id="options-container" class="space-y-3">
-                        <div class="flex items-center space-x-2 option-input-group">
-                            <input type="text" name="options" class="w-full bg-gray-800 border-2 border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition" placeholder="Option 1" required>
+                    <div class="mb-6">
+                        <label class="block text-lg font-semibold mb-2 text-indigo-100">Options</label>
+                        <div id="options-container" class="space-y-3">
+                            <div class="flex items-center space-x-2">
+                                <input type="text" name="options" class="w-full bg-slate-800 border-2 border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition" placeholder="Option 1" required>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <input type="text" name="options" class="w-full bg-slate-800 border-2 border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition" placeholder="Option 2" required>
+                            </div>
                         </div>
-                        <div class="flex items-center space-x-2 option-input-group">
-                            <input type="text" name="options" class="w-full bg-gray-800 border-2 border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition" placeholder="Option 2" required>
+                    </div>
+
+                    <div class="flex items-center space-x-4 mb-6">
+                        <button type="button" id="add-option-btn" class="flex items-center space-x-2 text-indigo-300 hover:text-white transition-colors duration-200">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg>
+                            <span>Add Option</span>
+                        </button>
+                        <button type="button" id="remove-option-btn" class="flex items-center space-x-2 text-red-400 hover:text-white transition-colors duration-200 hidden">
+                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5 10a1 1 0 011-1h8a1 1 0 110 2H6a1 1 0 01-1-1z" clip-rule="evenodd" /></svg>
+                            <span>Remove</span>
+                        </button>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                        <div>
+                            <label for="expiry" class="block text-lg font-semibold mb-2 text-indigo-100">Expires In</label>
+                            <select id="expiry" name="expiry" class="w-full bg-slate-800 border-2 border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition">
+                                <option value="never">Never</option>
+                                <option value="5m">5 Minutes</option>
+                                <option value="1h">1 Hour</option>
+                                <option value="24h">24 Hours</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-lg font-semibold mb-2 text-indigo-100">Mode</label>
+                            <label class="flex items-center bg-slate-800 border-2 border-slate-700 rounded-lg px-4 py-3 h-full cursor-pointer hover:border-slate-600 transition-colors">
+                                <input type="checkbox" id="quiz_mode" name="quiz_mode" class="form-checkbox h-5 w-5 rounded bg-slate-700 border-slate-600 text-indigo-600 focus:ring-2 focus:ring-offset-0 focus:ring-offset-transparent focus:ring-indigo-500">
+                                <span class="ml-3 text-white">Classroom Quiz Mode</span>
+                            </label>
                         </div>
                     </div>
-                </div>
 
-                <div class="flex items-center space-x-4 mb-6">
-                    <button type="button" id="add-option-btn" class="flex items-center space-x-2 text-indigo-300 hover:text-white transition">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg>
-                        <span>Add Option</span>
-                    </button>
-                    <button type="button" id="remove-option-btn" class="flex items-center space-x-2 text-red-400 hover:text-white transition hidden">
-                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5 10a1 1 0 011-1h8a1 1 0 110 2H6a1 1 0 01-1-1z" clip-rule="evenodd" /></svg>
-                        <span>Remove Option</span>
-                    </button>
-                </div>
-                
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                    <div>
-                        <label for="expiry" class="block text-lg font-semibold mb-2 text-indigo-100">Set Expiration</label>
-                        <select id="expiry" name="expiry" class="w-full bg-gray-800 border-2 border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition">
-                            <option value="never">Never</option>
-                            <option value="5m">5 Minutes</option>
-                            <option value="1h">1 Hour</option>
-                            <option value="24h">24 Hours</option>
-                        </select>
+                    <div class="mt-6">
+                        <button type="submit" class="w-full btn-primary text-lg font-bold py-4 rounded-lg shadow-lg">Create Poll</button>
                     </div>
-                    <!-- NEW: Quiz Mode Checkbox -->
-                    <div>
-                        <label for="quiz_mode" class="block text-lg font-semibold mb-2 text-indigo-100">Mode</label>
-                        <label class="flex items-center bg-gray-800 border-2 border-gray-700 rounded-lg px-4 py-3 h-full cursor-pointer">
-                            <input type="checkbox" id="quiz_mode" name="quiz_mode" class="form-checkbox h-5 w-5 rounded bg-gray-700 border-gray-600 text-indigo-600 focus:ring-indigo-500">
-                            <span class="ml-3 text-white">Live Classroom Quiz Mode</span>
-                        </label>
+                </form>
+            </main>
+
+            <!-- Loading / Links Section -->
+            <div id="loading-indicator" class="hidden text-center mt-8">
+                 <svg class="animate-spin h-8 w-8 text-white mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                <p class="mt-2 text-indigo-200">Creating your poll...</p>
+            </div>
+            
+            <div id="links-section" class="hidden glass-card rounded-2xl shadow-2xl p-6 md:p-8 mt-8">
+                <h2 class="text-2xl font-bold text-center text-white mb-6">Your Poll is Ready!</h2>
+                <div class="space-y-5">
+                    <div id="participant-link-card" class="link-card p-4 rounded-lg">
+                        <label class="block text-sm font-bold text-indigo-200 mb-2">🔗 Participant Link (Share this)</label>
+                        <div class="relative flex items-center bg-slate-800 rounded-md p-2">
+                            <input type="text" id="participant-link" readonly class="w-full bg-transparent text-slate-300 border-none focus:outline-none pr-10">
+                            <button class="copy-btn absolute right-2 text-slate-400 hover:text-white" data-target="participant-link">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                            </button>
+                            <div class="copy-btn-feedback">Copied!</div>
+                        </div>
                     </div>
-                </div>
-
-                <div class="mt-6">
-                    <button type="submit" class="w-full btn-primary text-lg font-bold py-4 rounded-lg shadow-lg transform hover:scale-105 transition-transform">Create Poll</button>
-                </div>
-            </form>
-        </main>
-
-        <!-- Loading / Links Section -->
-        <div id="loading-indicator" class="hidden text-center mt-8">
-             <svg class="animate-spin h-8 w-8 text-white mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-            <p class="mt-2 text-indigo-200">Creating your poll...</p>
-        </div>
-        
-        <!-- UPDATED: This section now shows the generated links -->
-        <div id="links-section" class="hidden mt-8 space-y-4">
-            <h2 class="text-2xl font-bold text-center text-white">Your Poll is Ready!</h2>
-            <!-- Participant Link -->
-            <div id="participant-link-card" class="link-card p-4 rounded-lg">
-                <label class="block text-sm font-bold text-indigo-200 mb-2">🔗 Participant Link (Share this)</label>
-                <div class="flex items-center bg-gray-800 rounded-md p-2">
-                    <input type="text" id="participant-link" readonly class="w-full bg-transparent text-gray-300 border-none focus:outline-none">
-                    <button class="copy-btn ml-2 text-gray-400 hover:text-white" data-target="participant-link">Copy</button>
+                    <div id="host-link-card" class="hidden link-card p-4 rounded-lg border-l-yellow-400">
+                        <label class="block text-sm font-bold text-yellow-200 mb-2">👑 Host Link (Private)</label>
+                        <div class="relative flex items-center bg-slate-800 rounded-md p-2">
+                            <input type="text" id="host-link" readonly class="w-full bg-transparent text-slate-300 border-none focus:outline-none pr-10">
+                            <button class="copy-btn absolute right-2 text-slate-400 hover:text-white" data-target="host-link">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                            </button>
+                            <div class="copy-btn-feedback">Copied!</div>
+                        </div>
+                    </div>
                 </div>
             </div>
-            <!-- Host Link -->
-            <div id="host-link-card" class="hidden link-card p-4 rounded-lg">
-                <label class="block text-sm font-bold text-yellow-200 mb-2">👑 Host Link (Private)</label>
-                <div class="flex items-center bg-gray-800 rounded-md p-2">
-                    <input type="text" id="host-link" readonly class="w-full bg-transparent text-gray-300 border-none focus:outline-none">
-                    <button class="copy-btn ml-2 text-gray-400 hover:text-white" data-target="host-link">Copy</button>
-                </div>
-            </div>
-        </div>
 
-        <div id="error-message" class="hidden text-center mt-6 bg-red-500/30 border border-red-500 text-red-300 px-4 py-3 rounded-lg">
-            <p id="error-text">An error occurred. Please try again.</p>
+            <div id="error-message" class="hidden text-center mt-6 bg-red-900/50 border border-red-500 text-red-300 px-4 py-3 rounded-lg">
+                <p id="error-text">An error occurred. Please try again.</p>
+            </div>
         </div>
     </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const createPollForm = document.getElementById('create-poll-form');
+            const cardContainer = document.getElementById('card-container');
             const pollCreationCard = document.getElementById('poll-creation-card');
             const loadingIndicator = document.getElementById('loading-indicator');
             const errorMessage = document.getElementById('error-message');
             const errorText = document.getElementById('error-text');
             const linksSection = document.getElementById('links-section');
-            const participantLinkCard = document.getElementById('participant-link-card');
             const hostLinkCard = document.getElementById('host-link-card');
             const participantLinkInput = document.getElementById('participant-link');
             const hostLinkInput = document.getElementById('host-link');
@@ -138,8 +182,8 @@
             addOptionBtn.addEventListener('click', () => {
                 if (optionsContainer.children.length >= 10) return;
                 const newOption = document.createElement('div');
-                newOption.className = 'flex items-center space-x-2 option-input-group';
-                newOption.innerHTML = `<input type="text" name="options" class="w-full bg-gray-800 border-2 border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Option ${optionsContainer.children.length + 1}" required>`;
+                newOption.className = 'flex items-center space-x-2';
+                newOption.innerHTML = `<input type="text" name="options" class="w-full bg-slate-800 border-2 border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition" placeholder="Option ${optionsContainer.children.length + 1}" required>`;
                 optionsContainer.appendChild(newOption);
                 updateRemoveButtonVisibility();
             });
@@ -186,6 +230,8 @@
                     const data = await response.json();
                     
                     loadingIndicator.classList.add('hidden');
+                    cardContainer.innerHTML = ''; // Clear the form
+                    cardContainer.appendChild(linksSection); // Add the links section
                     linksSection.classList.remove('hidden');
 
                     const baseUrl = window.location.origin;
@@ -194,8 +240,6 @@
                     if (data.host_secret) {
                         hostLinkInput.value = `${baseUrl}/host/${data.id}?secret=${data.host_secret}`;
                         hostLinkCard.classList.remove('hidden');
-                    } else {
-                        hostLinkCard.classList.add('hidden');
                     }
                     
                 } catch (error) {
@@ -207,14 +251,17 @@
                 }
             });
 
-            linksSection.addEventListener('click', (e) => {
-                if (e.target.matches('.copy-btn')) {
-                    const targetId = e.target.dataset.target;
+            cardContainer.addEventListener('click', (e) => {
+                const copyBtn = e.target.closest('.copy-btn');
+                if (copyBtn) {
+                    const targetId = copyBtn.dataset.target;
                     const input = document.getElementById(targetId);
                     input.select();
                     document.execCommand('copy');
-                    e.target.textContent = 'Copied!';
-                    setTimeout(() => { e.target.textContent = 'Copy'; }, 2000);
+                    
+                    const feedbackEl = copyBtn.nextElementSibling;
+                    feedbackEl.classList.add('show');
+                    setTimeout(() => { feedbackEl.classList.remove('show'); }, 2000);
                 }
             });
 
