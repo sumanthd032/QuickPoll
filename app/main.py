@@ -64,6 +64,36 @@ def get_client_ip(request: Request) -> str:
         return x_forwarded_for.split(',')[0]
     return request.client.host
 
+# --- NEW: Expiration Logic Helper ---
+def is_poll_expired(poll_data: dict) -> bool:
+    """Checks if a poll is expired based on its creation time and duration."""
+    duration_str = poll_data.get("expiry_duration")
+    if not duration_str or duration_str == "never":
+        return False
+
+    created_at = poll_data.get("created_at")
+    if not isinstance(created_at, datetime.datetime):
+        # If it's a string from Firestore, parse it
+        created_at = datetime.datetime.fromisoformat(str(created_at))
+    
+    # Ensure created_at is timezone-aware for correct comparison
+    if created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=datetime.timezone.utc)
+
+    delta = None
+    if duration_str.endswith('m'):
+        delta = datetime.timedelta(minutes=int(duration_str[:-1]))
+    elif duration_str.endswith('h'):
+        delta = datetime.timedelta(hours=int(duration_str[:-1]))
+    elif duration_str.endswith('d'):
+        delta = datetime.timedelta(days=int(duration_str[:-1]))
+
+    if delta:
+        expiration_time = created_at + delta
+        return datetime.datetime.now(datetime.timezone.utc) > expiration_time
+    
+    return False
+
 # --- API Endpoints ---
 
 @app.post("/api/polls", response_model=PollResponse, status_code=status.HTTP_201_CREATED, tags=["Polls"])
@@ -89,10 +119,16 @@ async def get_poll_data(poll_id: str, request: Request):
     poll_ref = db.collection('polls').document(poll_id)
     poll_doc = poll_ref.get()
     if not poll_doc.exists: raise HTTPException(status_code=404, detail="Poll not found")
+    
     poll_data = poll_doc.to_dict()
     client_ip = get_client_ip(request)
+
+    # --- UPDATED: Check for expiration ---
+    poll_data["is_expired"] = is_poll_expired(poll_data)
+
     if client_ip in poll_data.get("voter_ips", []):
         poll_data["user_voted"] = "yes"
+        
     return PollData(**poll_data)
 
 @app.post("/api/polls/{poll_id}/vote", status_code=status.HTTP_200_OK, tags=["Polls"])
@@ -100,65 +136,56 @@ async def cast_vote(poll_id: str, vote: VoteRequest, request: Request):
     if not db: raise HTTPException(status_code=503, detail="Firestore service is not available.")
     poll_ref = db.collection('polls').document(poll_id)
     client_ip = get_client_ip(request)
+    
     @firestore.transactional
     def vote_transaction(transaction, poll_ref, option_id, client_ip):
         snapshot = poll_ref.get(transaction=transaction)
         if not snapshot.exists: raise HTTPException(status_code=404, detail="Poll not found")
+        
         poll_data = snapshot.to_dict()
+
+        # --- UPDATED: Prevent voting on expired polls ---
+        if is_poll_expired(poll_data):
+            raise HTTPException(status_code=403, detail="This poll has expired.")
+
         if client_ip in poll_data.get("voter_ips", []): return {"message": "You have already voted."}
         if option_id not in poll_data.get("results", {}): raise HTTPException(status_code=400, detail="Invalid option ID")
+        
         transaction.update(poll_ref, {
             f'results.{option_id}': firestore.Increment(1),
             'voter_ips': firestore.ArrayUnion([client_ip])
         })
         return {"message": "Vote cast successfully."}
+
     transaction = db.transaction()
     return vote_transaction(transaction, poll_ref, vote.option_id, client_ip)
 
-# --- NEW: Real-time SSE Endpoint ---
 @app.get("/api/polls/{poll_id}/stream", tags=["Polls"])
 async def stream_poll_results(poll_id: str, request: Request):
-    """Streams poll results in real-time using Server-Sent Events."""
     if not db: raise HTTPException(status_code=503, detail="Firestore service is not available.")
-
-    # Using an asyncio.Queue to bridge the threaded Firestore listener and the async SSE generator
     queue = asyncio.Queue()
-    
-    # This Event is used to signal the listener thread to stop
     stop_event = Event()
-
     def on_snapshot_callback(doc_snapshot, changes, read_time):
-        """Callback function for Firestore listener."""
         for doc in doc_snapshot:
             if doc.exists:
-                # Put the new data into the queue for the SSE stream to send
                 queue.put_nowait(doc.to_dict())
-
-    # Start the Firestore listener in a separate thread
     poll_ref = db.collection("polls").document(poll_id)
     listener = poll_ref.on_snapshot(on_snapshot_callback)
-
     async def event_generator():
-        """Generator function that yields SSE messages."""
         try:
             while not await request.is_disconnected():
                 try:
-                    # Wait for new data from the queue
                     data = await asyncio.wait_for(queue.get(), timeout=30) 
-                    # Convert dict to JSON string for SSE
-                    # The 'default=str' handles datetime objects
+                    # --- UPDATED: Add expiration status to stream ---
+                    data["is_expired"] = is_poll_expired(data)
                     json_data = json.dumps(data, default=str)
                     yield f"data: {json_data}\n\n"
                 except asyncio.TimeoutError:
-                    # Send a comment to keep the connection alive
                     yield ": keep-alive\n\n"
         finally:
-            # When the client disconnects, stop the listener
             print(f"Client disconnected from poll {poll_id}. Cleaning up listener.")
             listener.unsubscribe()
-
     return StreamingResponse(event_generator(), media_type="text/event-stream")
-
 
 @app.get("/api/health", tags=["Status"])
 async def health_check():
