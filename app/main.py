@@ -1,3 +1,5 @@
+# app/main.py
+
 import os
 import uuid
 import datetime
@@ -13,7 +15,7 @@ from pydantic import BaseModel, Field
 from typing import List, Dict, Optional
 from threading import Event
 
-# --- Import dotenv ---
+# --- NEW: Import dotenv ---
 from dotenv import load_dotenv
 
 # --- Firebase Admin SDK ---
@@ -34,7 +36,6 @@ app = FastAPI(
 # --- Firebase Initialization ---
 try:
     private_key = os.getenv("FIREBASE_PRIVATE_KEY", "").replace('\\n', '\n')
-    
     cred_dict = {
         "type": os.getenv("FIREBASE_TYPE"),
         "project_id": os.getenv("FIREBASE_PROJECT_ID"),
@@ -47,11 +48,8 @@ try:
         "auth_provider_x509_cert_url": os.getenv("FIREBASE_AUTH_PROVIDER_X509_CERT_URL"),
         "client_x509_cert_url": os.getenv("FIREBASE_CLIENT_X509_CERT_URL")
     }
-    
-    # Check if all required keys are present
     if not all(cred_dict.values()):
          raise ValueError("One or more Firebase environment variables are not set. Please check your .env file or hosting configuration.")
-
     cred = credentials.Certificate(cred_dict)
     firebase_admin.initialize_app(cred)
     db = firestore.client()
@@ -64,6 +62,7 @@ except Exception as e:
 current_dir = os.path.dirname(os.path.abspath(__file__))
 static_dir = os.path.join(current_dir, '..', 'static')
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
 
 # --- Pydantic Models ---
 class PollCreate(BaseModel):
@@ -96,9 +95,22 @@ class HostActionRequest(BaseModel):
     host_secret: str
 
 # --- Helper Functions ---
+# --- UPDATED: IP Address Logic for Vercel ---
 def get_client_ip(request: Request) -> str:
+    """
+    Gets the client's real IP address, prioritizing Vercel's specific header.
+    """
+    # Vercel provides the user's IP in this header
+    vercel_ip = request.headers.get("x-vercel-forwarded-for")
+    if vercel_ip:
+        return vercel_ip
+    
+    # Fallback for standard reverse proxies
     x_forwarded_for = request.headers.get('x-forwarded-for')
-    if x_forwarded_for: return x_forwarded_for.split(',')[0]
+    if x_forwarded_for:
+        return x_forwarded_for.split(',')[0]
+    
+    # Fallback for direct connection (local development)
     return request.client.host
 
 def is_poll_expired(poll_data: dict) -> bool:
@@ -115,6 +127,8 @@ def is_poll_expired(poll_data: dict) -> bool:
     elif duration_str.endswith('d'): delta = datetime.timedelta(days=int(duration_str[:-1]))
     if delta: return datetime.datetime.now(datetime.timezone.utc) > created_at + delta
     return False
+
+# --- (The rest of the file is unchanged) ---
 
 # --- API Endpoints ---
 @app.post("/api/polls", response_model=PollCreateResponse, status_code=status.HTTP_201_CREATED, tags=["Polls"])
