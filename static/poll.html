@@ -44,17 +44,18 @@
                     <div id="results-list" class="space-y-4"></div>
                     <p id="total-votes" class="text-center mt-6 text-gray-400"></p>
                 </div>
+                
+                <!-- Status Messages -->
+                <div id="waiting-for-results" class="hidden text-center mt-6 bg-purple-500/30 border border-purple-500 text-purple-300 px-4 py-3 rounded-lg"><p>Thanks for voting! Waiting for the host to reveal the results.</p></div>
                 <div id="poll-expired-message" class="hidden text-center mt-6 bg-yellow-500/30 border border-yellow-500 text-yellow-300 px-4 py-3 rounded-lg"><p>This poll has expired.</p></div>
                 <div id="already-voted-message" class="hidden text-center mt-6 bg-blue-500/30 border border-blue-500 text-blue-300 px-4 py-3 rounded-lg"><p>You have already voted in this poll.</p></div>
                 
-                <!-- Action Buttons Container -->
                 <div id="action-buttons" class="mt-8 text-center">
                     <div class="flex items-center justify-center space-x-4">
                         <button id="share-btn" class="action-btn share-btn text-gray-900 font-bold py-3 px-6 rounded-lg inline-flex items-center space-x-2 transform hover:scale-105 transition-transform">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z" /></svg>
                             <span>Share Poll</span>
                         </button>
-                        <!-- NEW: Export Button (as a link) -->
                         <a id="export-btn-link" class="hidden action-btn export-btn text-white font-bold py-3 px-6 rounded-lg inline-flex items-center space-x-2 transform hover:scale-105 transition-transform">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
                             <span>Export CSV</span>
@@ -84,6 +85,7 @@
             const copyConfirm = document.getElementById('copy-confirm');
             const pollExpiredMessage = document.getElementById('poll-expired-message');
             const alreadyVotedMessage = document.getElementById('already-voted-message');
+            const waitingForResultsMessage = document.getElementById('waiting-for-results');
             const exportBtnLink = document.getElementById('export-btn-link');
             
             let userHasVoted = false;
@@ -95,7 +97,6 @@
             };
 
             const pollId = getPollId();
-            // Set the href for the export link
             exportBtnLink.href = `/api/polls/${pollId}/export`;
 
             const renderPoll = (data) => {
@@ -120,12 +121,19 @@
                     resultsList.appendChild(resultItem);
                 });
 
+                const showResults = !data.quiz_mode || data.results_revealed;
+
                 if (userHasVoted || data.is_expired) {
-                    resultsSection.classList.remove('hidden');
                     optionsList.classList.add('hidden');
-                    exportBtnLink.classList.remove('hidden'); // Show export button
+                    if (showResults) {
+                        resultsSection.classList.remove('hidden');
+                        exportBtnLink.classList.remove('hidden');
+                        waitingForResultsMessage.classList.add('hidden');
+                    } else {
+                        waitingForResultsMessage.classList.remove('hidden');
+                    }
                     if (data.is_expired) pollExpiredMessage.classList.remove('hidden');
-                    if (userHasVoted) alreadyVotedMessage.classList.remove('hidden');
+                    else alreadyVotedMessage.classList.remove('hidden');
                 }
             };
 
@@ -141,7 +149,6 @@
                 } catch (err) {
                     loadingState.classList.add('hidden');
                     errorMessage.classList.remove('hidden');
-                    console.error("Failed to fetch poll:", err);
                 }
             };
 
@@ -156,7 +163,6 @@
                     if (!response.ok) throw new Error('Vote failed');
                     userHasVoted = true;
                 } catch (err) {
-                    console.error("Failed to cast vote:", err);
                     document.querySelectorAll('.option-button').forEach(btn => btn.disabled = false);
                 }
             };
@@ -164,14 +170,10 @@
             const setupSSE = () => {
                 const eventSource = new EventSource(`/api/polls/${pollId}/stream`);
                 eventSource.onmessage = (event) => {
-                    console.log("SSE message received:", event.data);
                     const data = JSON.parse(event.data);
                     renderPoll(data);
                 };
-                eventSource.onerror = (err) => {
-                    console.error("EventSource failed:", err);
-                    eventSource.close();
-                };
+                eventSource.onerror = () => eventSource.close();
             };
 
             optionsList.addEventListener('click', (e) => {

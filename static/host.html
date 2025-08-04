@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Host Control Panel - QuickPoll</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .glass-card { background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.2); }
+        .result-bar-container { background-color: rgba(0, 0, 0, 0.2); border-radius: 0.5rem; overflow: hidden; }
+        .result-bar { background: linear-gradient(90deg, #4f46e5, #818cf8); transition: width 0.5s ease-in-out; white-space: nowrap; text-shadow: 1px 1px 2px rgba(0,0,0,0.5); }
+        .btn-reveal { background-color: #2dd4bf; transition: background-color 0.3s ease; }
+        .btn-reveal:hover:not(:disabled) { background-color: #14b8a6; }
+        .btn-reveal:disabled { background-color: #374151; cursor: not-allowed; }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-gray-900 to-yellow-900">
+
+    <div class="w-full max-w-2xl">
+        <main id="host-container" class="glass-card rounded-2xl shadow-2xl p-6 md:p-8">
+            <div id="loading-state" class="text-center py-8">
+                <svg class="animate-spin h-8 w-8 text-white mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                <p class="mt-3 text-yellow-200">Loading Host Panel...</p>
+            </div>
+            
+            <div id="host-content" class="hidden">
+                <div class="text-center mb-6 border-b-2 border-yellow-500/30 pb-4">
+                    <h1 class="text-2xl md:text-3xl font-bold text-yellow-300">👑 Host Control Panel</h1>
+                </div>
+                <h2 id="poll-question" class="text-xl md:text-2xl font-semibold text-center mb-8"></h2>
+                
+                <div id="results-section">
+                    <h3 class="text-xl font-bold mb-4 text-center text-yellow-200">Live Results</h3>
+                    <div id="results-list" class="space-y-4"></div>
+                    <p id="total-votes" class="text-center mt-6 text-gray-400"></p>
+                </div>
+
+                <div class="mt-8">
+                    <button id="reveal-btn" class="w-full btn-reveal text-gray-900 text-lg font-bold py-4 rounded-lg shadow-lg transform hover:scale-105 transition-transform">
+                        Reveal Results to Participants
+                    </button>
+                    <p id="revealed-message" class="hidden text-center mt-4 text-teal-300 font-semibold">Results are now visible to all participants!</p>
+                </div>
+            </div>
+
+            <div id="error-message" class="hidden text-center py-8">
+                <p class="text-red-400 text-lg">Could not load host panel.</p>
+                <p class="text-gray-400">The poll may not exist or your secret key is invalid.</p>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const loadingState = document.getElementById('loading-state');
+            const hostContent = document.getElementById('host-content');
+            const errorMessage = document.getElementById('error-message');
+            const pollQuestion = document.getElementById('poll-question');
+            const resultsList = document.getElementById('results-list');
+            const totalVotesEl = document.getElementById('total-votes');
+            const revealBtn = document.getElementById('reveal-btn');
+            const revealedMessage = document.getElementById('revealed-message');
+
+            const getUrlParams = () => {
+                const path = window.location.pathname;
+                const pathParts = path.split('/');
+                const pollId = pathParts[pathParts.length - 1];
+                const secret = new URLSearchParams(window.location.search).get('secret');
+                return { pollId, secret };
+            };
+
+            const { pollId, secret } = getUrlParams();
+
+            if (!pollId || !secret) {
+                loadingState.classList.add('hidden');
+                errorMessage.classList.remove('hidden');
+                return;
+            }
+
+            const renderResults = (data) => {
+                pollQuestion.textContent = data.question;
+                resultsList.innerHTML = '';
+
+                const totalVotes = Object.values(data.results).reduce((sum, count) => sum + count, 0);
+                totalVotesEl.textContent = `Total Votes: ${totalVotes}`;
+
+                data.options.forEach(option => {
+                    const voteCount = data.results[option.id] || 0;
+                    const percentage = totalVotes > 0 ? ((voteCount / totalVotes) * 100).toFixed(1) : 0;
+                    const resultItem = document.createElement('div');
+                    resultItem.innerHTML = `<div class="flex justify-between items-center mb-1"><span class="font-semibold">${option.text}</span><span class="text-gray-300">${voteCount} votes (${percentage}%)</span></div><div class="result-bar-container"><div class="result-bar h-6 flex items-center justify-start px-2" style="width: ${percentage}%;"></div></div>`;
+                    resultsList.appendChild(resultItem);
+                });
+
+                if (data.results_revealed) {
+                    revealBtn.disabled = true;
+                    revealBtn.textContent = 'Results Revealed';
+                    revealedMessage.classList.remove('hidden');
+                }
+            };
+
+            const handleReveal = async () => {
+                revealBtn.disabled = true;
+                try {
+                    const response = await fetch(`/api/polls/${pollId}/reveal`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ host_secret: secret })
+                    });
+                    if (!response.ok) {
+                        throw new Error('Failed to reveal results.');
+                    }
+                    // The SSE stream will update the button state, but we can do it here for immediate feedback
+                    revealBtn.textContent = 'Results Revealed';
+                    revealedMessage.classList.remove('hidden');
+                } catch (err) {
+                    console.error("Reveal error:", err);
+                    alert(err.message);
+                    revealBtn.disabled = false;
+                }
+            };
+
+            const setupSSE = () => {
+                const eventSource = new EventSource(`/api/polls/${pollId}/stream?host_secret=${secret}`);
+                
+                eventSource.onopen = () => {
+                    loadingState.classList.add('hidden');
+                    hostContent.classList.remove('hidden');
+                };
+
+                eventSource.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    renderResults(data);
+                };
+
+                eventSource.onerror = (err) => {
+                    console.error("EventSource failed:", err);
+                    loadingState.classList.add('hidden');
+                    errorMessage.classList.remove('hidden');
+                    eventSource.close();
+                };
+            };
+
+            revealBtn.addEventListener('click', handleReveal);
+
+            // Start the connection
+            setupSSE();
+        });
+    </script>
+</body>
+</html>
