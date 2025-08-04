@@ -114,7 +114,7 @@
         
         <!-- Error Message -->
         <div id="error-message" class="hidden text-center mt-6 bg-red-500/30 border border-red-500 text-red-300 px-4 py-3 rounded-lg">
-            <p>An error occurred. Please try again.</p>
+            <p id="error-text">An error occurred. Please try again.</p>
         </div>
 
     </div>
@@ -128,19 +128,16 @@
             const pollCreationCard = document.getElementById('poll-creation-card');
             const loadingIndicator = document.getElementById('loading-indicator');
             const errorMessage = document.getElementById('error-message');
+            const errorText = document.getElementById('error-text');
 
             const updateRemoveButtonVisibility = () => {
                 const optionCount = optionsContainer.children.length;
-                if (optionCount > 2) {
-                    removeOptionBtn.classList.remove('hidden');
-                } else {
-                    removeOptionBtn.classList.add('hidden');
-                }
+                removeOptionBtn.classList.toggle('hidden', optionCount <= 2);
             };
 
             addOptionBtn.addEventListener('click', () => {
                 const optionCount = optionsContainer.children.length;
-                if (optionCount >= 10) { // Limit max options
+                if (optionCount >= 10) {
                     alert("You can add a maximum of 10 options.");
                     return;
                 }
@@ -161,7 +158,6 @@
             createPollForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 
-                // Hide form, show loader
                 pollCreationCard.classList.add('hidden');
                 errorMessage.classList.add('hidden');
                 loadingIndicator.classList.remove('hidden');
@@ -172,39 +168,37 @@
                 const expiry = formData.get('expiry');
 
                 if (options.length < 2) {
-                    alert("Please provide at least two options.");
+                    errorText.textContent = "Please provide at least two valid options.";
                     loadingIndicator.classList.add('hidden');
+                    errorMessage.classList.remove('hidden');
                     pollCreationCard.classList.remove('hidden');
                     return;
                 }
 
-                // This is where you would make the API call to your FastAPI backend.
-                // For now, we'll simulate it and redirect.
-                console.log('Submitting poll:', { question, options, expiry });
+                try {
+                    const response = await fetch('/api/polls', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ question, options, expiry })
+                    });
 
-                // --- MOCK API CALL ---
-                // In a real app, you would replace this with a fetch() call:
-                // const response = await fetch('/api/polls', {
-                //     method: 'POST',
-                //     headers: { 'Content-Type': 'application/json' },
-                //     body: JSON.stringify({ question, options, expiry })
-                // });
-                // const data = await response.json();
-                
-                // Simulating a network delay
-                setTimeout(() => {
-                    // On success:
-                    // window.location.href = `/poll.html?id=${data.poll_id}`;
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.detail || 'Failed to create poll.');
+                    }
+
+                    const data = await response.json();
                     
-                    // For demonstration, we'll just go to a placeholder poll page
-                    window.location.href = 'poll.html'; 
+                    // Redirect to the newly created poll page
+                    window.location.href = `/polls/${data.id}`;
 
-                    // On error:
-                    // loadingIndicator.classList.add('hidden');
-                    // errorMessage.classList.remove('hidden');
-                    // pollCreationCard.classList.remove('hidden');
-
-                }, 1500);
+                } catch (error) {
+                    console.error('Error creating poll:', error);
+                    errorText.textContent = error.message;
+                    loadingIndicator.classList.add('hidden');
+                    errorMessage.classList.remove('hidden');
+                    pollCreationCard.classList.remove('hidden');
+                }
             });
 
             updateRemoveButtonVisibility();

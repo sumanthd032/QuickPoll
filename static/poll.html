@@ -55,15 +55,10 @@
 <body class="bg-gray-900 text-white min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-gray-900 to-indigo-900">
 
     <div class="w-full max-w-2xl">
-        <!-- Back to Home Link -->
         <div class="text-center mb-4">
-            <a href="index.html" class="text-indigo-300 hover:text-white transition">&larr; Create a new poll</a>
+            <a href="/" class="text-indigo-300 hover:text-white transition">&larr; Create a new poll</a>
         </div>
-
-        <!-- Poll Card -->
         <main id="poll-container" class="glass-card rounded-2xl shadow-2xl p-6 md:p-8">
-            
-            <!-- Loading State -->
             <div id="loading-state" class="text-center py-8">
                 <svg class="animate-spin h-8 w-8 text-white mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -71,50 +66,30 @@
                 </svg>
                 <p class="mt-3 text-indigo-200">Loading Poll...</p>
             </div>
-
-            <!-- Poll Content (hidden by default) -->
             <div id="poll-content" class="hidden">
-                <h1 id="poll-question" class="text-2xl md:text-3xl font-bold text-center mb-8">
-                    <!-- Poll question will be injected here -->
-                    What should we order for lunch?
-                </h1>
-
-                <!-- Voting Section -->
+                <h1 id="poll-question" class="text-2xl md:text-3xl font-bold text-center mb-8"></h1>
                 <div id="voting-section" class="mb-8">
-                    <div id="options-list" class="space-y-3">
-                        <!-- Options will be dynamically inserted here -->
-                    </div>
+                    <div id="options-list" class="space-y-3"></div>
                 </div>
-
-                <!-- Results Section (hidden until vote is cast or if user already voted) -->
                 <div id="results-section" class="hidden">
                     <h2 class="text-xl font-bold mb-4 text-center text-indigo-200">Results</h2>
-                    <div id="results-list" class="space-y-4">
-                        <!-- Results will be dynamically inserted here -->
-                    </div>
-                    <p id="total-votes" class="text-center mt-6 text-gray-400">Total Votes: 0</p>
+                    <div id="results-list" class="space-y-4"></div>
+                    <p id="total-votes" class="text-center mt-6 text-gray-400"></p>
                 </div>
-                
-                <!-- Poll Status Messages -->
                 <div id="poll-expired-message" class="hidden text-center mt-6 bg-yellow-500/30 border border-yellow-500 text-yellow-300 px-4 py-3 rounded-lg">
-                    <p>This poll has expired. No more votes can be cast.</p>
+                    <p>This poll has expired.</p>
                 </div>
                 <div id="already-voted-message" class="hidden text-center mt-6 bg-blue-500/30 border border-blue-500 text-blue-300 px-4 py-3 rounded-lg">
                     <p>You have already voted in this poll.</p>
                 </div>
-
-                <!-- Share Button -->
                 <div class="mt-8 text-center">
                     <button id="share-btn" class="share-btn text-gray-900 font-bold py-3 px-6 rounded-lg inline-flex items-center space-x-2 transform hover:scale-105 transition-transform">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                            <path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z" />
-                        </svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z" /></svg>
                         <span>Share Poll</span>
                     </button>
                     <p id="copy-confirm" class="text-teal-300 mt-2 h-5 transition-opacity opacity-0">Link copied to clipboard!</p>
                 </div>
             </div>
-             <!-- Error Message -->
             <div id="error-message" class="hidden text-center py-8">
                 <p class="text-red-400 text-lg">Could not load poll.</p>
                 <p class="text-gray-400">The poll may not exist or the link is incorrect.</p>
@@ -123,7 +98,7 @@
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
             const loadingState = document.getElementById('loading-state');
             const pollContent = document.getElementById('poll-content');
             const errorMessage = document.getElementById('error-message');
@@ -134,50 +109,36 @@
             const totalVotesEl = document.getElementById('total-votes');
             const shareBtn = document.getElementById('share-btn');
             const copyConfirm = document.getElementById('copy-confirm');
-            
             const pollExpiredMessage = document.getElementById('poll-expired-message');
             const alreadyVotedMessage = document.getElementById('already-voted-message');
 
-
-            // --- MOCK DATA ---
-            const mockPollData = {
-                id: 'xyz123',
-                question: 'What is the best programming language for beginners?',
-                options: [
-                    { id: 'opt1', text: 'Python' },
-                    { id: 'opt2', text: 'JavaScript' },
-                    { id: 'opt3', text: 'Ruby' },
-                    { id: 'opt4', text: 'C#' },
-                ],
-                results: { 'opt1': 15, 'opt2': 25, 'opt3': 5, 'opt4': 10 },
-                isExpired: false,
-                userVoted: null, // or 'opt2' if user has voted
+            const getPollId = () => {
+                const path = window.location.pathname;
+                const parts = path.split('/');
+                return parts[parts.length - 1];
             };
-            // --- END MOCK DATA ---
+
+            const pollId = getPollId();
 
             const renderPoll = (data) => {
                 pollQuestion.textContent = data.question;
                 optionsList.innerHTML = '';
                 resultsList.innerHTML = '';
 
-                // Calculate total votes
                 const totalVotes = Object.values(data.results).reduce((sum, count) => sum + count, 0);
                 totalVotesEl.textContent = `Total Votes: ${totalVotes}`;
 
-                // Render options and results
                 data.options.forEach(option => {
                     const voteCount = data.results[option.id] || 0;
                     const percentage = totalVotes > 0 ? ((voteCount / totalVotes) * 100).toFixed(1) : 0;
 
-                    // Create option button for voting
                     const optionButton = document.createElement('button');
                     optionButton.className = 'w-full text-left p-4 font-semibold text-lg rounded-lg option-button';
                     optionButton.textContent = option.text;
                     optionButton.dataset.optionId = option.id;
-                    optionButton.disabled = data.userVoted || data.isExpired;
+                    optionButton.disabled = data.user_voted || data.is_expired;
                     optionsList.appendChild(optionButton);
 
-                    // Create result bar
                     const resultItem = document.createElement('div');
                     resultItem.innerHTML = `
                         <div class="flex justify-between items-center mb-1">
@@ -185,96 +146,74 @@
                             <span class="text-gray-300">${voteCount} votes (${percentage}%)</span>
                         </div>
                         <div class="result-bar-container">
-                            <div class="result-bar h-6 flex items-center justify-start px-2" style="width: ${percentage}%;">
-                            </div>
+                            <div class="result-bar h-6 flex items-center justify-start px-2" style="width: ${percentage}%;"></div>
                         </div>
                     `;
                     resultsList.appendChild(resultItem);
                 });
 
-                // Show results if user has voted or poll is expired
-                if (data.userVoted || data.isExpired) {
+                if (data.user_voted || data.is_expired) {
                     resultsSection.classList.remove('hidden');
-                    if (data.isExpired) pollExpiredMessage.classList.remove('hidden');
-                    if (data.userVoted) alreadyVotedMessage.classList.remove('hidden');
+                    optionsList.classList.add('hidden');
+                    if (data.is_expired) pollExpiredMessage.classList.remove('hidden');
+                    if (data.user_voted) alreadyVotedMessage.classList.remove('hidden');
                 }
             };
 
-            const handleVote = (optionId) => {
-                console.log(`Voted for: ${optionId}`);
-                
-                // --- MOCK API CALL ---
-                // In a real app, you would send the vote to the backend:
-                // await fetch(`/api/polls/${pollId}/vote`, {
-                //     method: 'POST',
-                //     headers: { 'Content-Type': 'application/json' },
-                //     body: JSON.stringify({ option_id: optionId })
-                // });
+            const fetchAndRenderPoll = async () => {
+                try {
+                    const response = await fetch(`/api/polls/${pollId}`);
+                    if (!response.ok) {
+                        throw new Error('Poll not found');
+                    }
+                    const data = await response.json();
+                    
+                    loadingState.classList.add('hidden');
+                    pollContent.classList.remove('hidden');
+                    renderPoll(data);
+                } catch (err) {
+                    loadingState.classList.add('hidden');
+                    errorMessage.classList.remove('hidden');
+                    console.error("Failed to fetch poll:", err);
+                }
+            };
 
-                // For now, we simulate the result of voting
-                mockPollData.userVoted = optionId;
-                mockPollData.results[optionId]++;
-                
-                // Disable all buttons and show results
+            const handleVote = async (optionId) => {
                 document.querySelectorAll('.option-button').forEach(btn => btn.disabled = true);
-                alreadyVotedMessage.classList.remove('hidden');
-                resultsSection.classList.remove('hidden');
-
-                // Re-render to update percentages and counts
-                renderPoll(mockPollData);
+                try {
+                    const response = await fetch(`/api/polls/${pollId}/vote`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ option_id: optionId })
+                    });
+                    if (!response.ok) {
+                        throw new Error('Vote failed');
+                    }
+                    // Re-fetch the data to show the latest results
+                    await fetchAndRenderPoll();
+                } catch (err) {
+                    console.error("Failed to cast vote:", err);
+                    // Optionally re-enable buttons if vote fails
+                    document.querySelectorAll('.option-button').forEach(btn => btn.disabled = false);
+                }
             };
 
             optionsList.addEventListener('click', (e) => {
-                if (e.target.matches('.option-button')) {
-                    const optionId = e.target.dataset.optionId;
-                    handleVote(optionId);
+                if (e.target.matches('.option-button') && !e.target.disabled) {
+                    handleVote(e.target.dataset.optionId);
                 }
             });
 
             shareBtn.addEventListener('click', () => {
                 const url = window.location.href;
-                // Use the Clipboard API
                 navigator.clipboard.writeText(url).then(() => {
                     copyConfirm.classList.remove('opacity-0');
-                    setTimeout(() => {
-                        copyConfirm.classList.add('opacity-0');
-                    }, 2000);
-                }).catch(err => {
-                    console.error('Failed to copy: ', err);
-                    // Fallback for older browsers
-                    try {
-                        const textArea = document.createElement('textarea');
-                        textArea.value = url;
-                        document.body.appendChild(textArea);
-                        textArea.focus();
-                        textArea.select();
-                        document.execCommand('copy');
-                        document.body.removeChild(textArea);
-                        copyConfirm.classList.remove('opacity-0');
-                        setTimeout(() => {
-                            copyConfirm.classList.add('opacity-0');
-                        }, 2000);
-                    } catch (e) {
-                         alert('Failed to copy URL.');
-                    }
-                });
+                    setTimeout(() => copyConfirm.classList.add('opacity-0'), 2000);
+                }).catch(err => console.error('Failed to copy: ', err));
             });
 
-            // --- MOCK LOADING ---
-            // In a real app, you would fetch the poll data from the API
-            // const pollId = new URLSearchParams(window.location.search).get('id');
-            // fetch(`/api/polls/${pollId}`).then(res => res.json()).then(data => { ... })
-            setTimeout(() => {
-                loadingState.classList.add('hidden');
-                // You can test the error state by changing this to true
-                const showError = false; 
-                if(showError) {
-                    errorMessage.classList.remove('hidden');
-                } else {
-                    pollContent.classList.remove('hidden');
-                    renderPoll(mockPollData);
-                }
-            }, 1000);
+            // Initial load
+            await fetchAndRenderPoll();
         });
     </script>
 </body>
