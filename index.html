@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuickPoll – Instant One-Question Poll Creator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .btn-primary {
+            background-color: #4f46e5;
+            transition: background-color 0.3s ease;
+        }
+        .btn-primary:hover {
+            background-color: #4338ca;
+        }
+        .btn-secondary {
+            background-color: #374151;
+            transition: background-color 0.3s ease;
+        }
+        .btn-secondary:hover {
+            background-color: #4b5563;
+        }
+        .option-input-group {
+            transition: all 0.3s ease;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-gray-900 to-indigo-900">
+
+    <div class="w-full max-w-2xl">
+        <!-- Header -->
+        <header class="text-center mb-8">
+            <h1 class="text-4xl md:text-5xl font-bold mb-2">QuickPoll</h1>
+            <p class="text-lg md:text-xl text-indigo-300">Instant One-Question Poll Creator</p>
+        </header>
+
+        <!-- Poll Creation Card -->
+        <main id="poll-creation-card" class="glass-card rounded-2xl shadow-2xl p-6 md:p-8">
+            <form id="create-poll-form">
+                <!-- Question Input -->
+                <div class="mb-6">
+                    <label for="question" class="block text-lg font-semibold mb-2 text-indigo-100">Your Question</label>
+                    <input type="text" id="question" name="question" class="w-full bg-gray-800 border-2 border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition" placeholder="e.g., What should we order for lunch?" required>
+                </div>
+
+                <!-- Options Input -->
+                <div class="mb-6">
+                    <label class="block text-lg font-semibold mb-2 text-indigo-100">Options</label>
+                    <div id="options-container" class="space-y-3">
+                        <!-- Initial two options -->
+                        <div class="flex items-center space-x-2 option-input-group">
+                            <input type="text" name="options" class="w-full bg-gray-800 border-2 border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition" placeholder="Option 1" required>
+                        </div>
+                        <div class="flex items-center space-x-2 option-input-group">
+                            <input type="text" name="options" class="w-full bg-gray-800 border-2 border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition" placeholder="Option 2" required>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons for Options -->
+                <div class="flex items-center space-x-4 mb-8">
+                    <button type="button" id="add-option-btn" class="flex items-center space-x-2 text-indigo-300 hover:text-white transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg>
+                        <span>Add Option</span>
+                    </button>
+                    <button type="button" id="remove-option-btn" class="flex items-center space-x-2 text-red-400 hover:text-white transition hidden">
+                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5 10a1 1 0 011-1h8a1 1 0 110 2H6a1 1 0 01-1-1z" clip-rule="evenodd" /></svg>
+                        <span>Remove Option</span>
+                    </button>
+                </div>
+                
+                <!-- Expiration Time -->
+                <div class="mb-8">
+                    <label for="expiry" class="block text-lg font-semibold mb-2 text-indigo-100">Set Expiration (Optional)</label>
+                    <select id="expiry" name="expiry" class="w-full bg-gray-800 border-2 border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition">
+                        <option value="never">Never</option>
+                        <option value="5m">5 Minutes</option>
+                        <option value="15m">15 Minutes</option>
+                        <option value="1h">1 Hour</option>
+                        <option value="24h">24 Hours</option>
+                        <option value="7d">7 Days</option>
+                    </select>
+                </div>
+
+                <!-- Submit Button -->
+                <div class="mt-6">
+                    <button type="submit" class="w-full btn-primary text-lg font-bold py-4 rounded-lg shadow-lg transform hover:scale-105 transition-transform">
+                        Create Poll
+                    </button>
+                </div>
+            </form>
+        </main>
+
+        <!-- Loading Indicator -->
+        <div id="loading-indicator" class="hidden text-center mt-8">
+             <svg class="animate-spin h-8 w-8 text-white mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <p class="mt-2 text-indigo-200">Creating your poll...</p>
+        </div>
+        
+        <!-- Error Message -->
+        <div id="error-message" class="hidden text-center mt-6 bg-red-500/30 border border-red-500 text-red-300 px-4 py-3 rounded-lg">
+            <p>An error occurred. Please try again.</p>
+        </div>
+
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const optionsContainer = document.getElementById('options-container');
+            const addOptionBtn = document.getElementById('add-option-btn');
+            const removeOptionBtn = document.getElementById('remove-option-btn');
+            const createPollForm = document.getElementById('create-poll-form');
+            const pollCreationCard = document.getElementById('poll-creation-card');
+            const loadingIndicator = document.getElementById('loading-indicator');
+            const errorMessage = document.getElementById('error-message');
+
+            const updateRemoveButtonVisibility = () => {
+                const optionCount = optionsContainer.children.length;
+                if (optionCount > 2) {
+                    removeOptionBtn.classList.remove('hidden');
+                } else {
+                    removeOptionBtn.classList.add('hidden');
+                }
+            };
+
+            addOptionBtn.addEventListener('click', () => {
+                const optionCount = optionsContainer.children.length;
+                if (optionCount >= 10) { // Limit max options
+                    alert("You can add a maximum of 10 options.");
+                    return;
+                }
+                const newOption = document.createElement('div');
+                newOption.className = 'flex items-center space-x-2 option-input-group';
+                newOption.innerHTML = `<input type="text" name="options" class="w-full bg-gray-800 border-2 border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition" placeholder="Option ${optionCount + 1}" required>`;
+                optionsContainer.appendChild(newOption);
+                updateRemoveButtonVisibility();
+            });
+
+            removeOptionBtn.addEventListener('click', () => {
+                if (optionsContainer.children.length > 2) {
+                    optionsContainer.lastElementChild.remove();
+                }
+                updateRemoveButtonVisibility();
+            });
+
+            createPollForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                // Hide form, show loader
+                pollCreationCard.classList.add('hidden');
+                errorMessage.classList.add('hidden');
+                loadingIndicator.classList.remove('hidden');
+
+                const formData = new FormData(createPollForm);
+                const question = formData.get('question');
+                const options = formData.getAll('options').filter(opt => opt.trim() !== '');
+                const expiry = formData.get('expiry');
+
+                if (options.length < 2) {
+                    alert("Please provide at least two options.");
+                    loadingIndicator.classList.add('hidden');
+                    pollCreationCard.classList.remove('hidden');
+                    return;
+                }
+
+                // This is where you would make the API call to your FastAPI backend.
+                // For now, we'll simulate it and redirect.
+                console.log('Submitting poll:', { question, options, expiry });
+
+                // --- MOCK API CALL ---
+                // In a real app, you would replace this with a fetch() call:
+                // const response = await fetch('/api/polls', {
+                //     method: 'POST',
+                //     headers: { 'Content-Type': 'application/json' },
+                //     body: JSON.stringify({ question, options, expiry })
+                // });
+                // const data = await response.json();
+                
+                // Simulating a network delay
+                setTimeout(() => {
+                    // On success:
+                    // window.location.href = `/poll.html?id=${data.poll_id}`;
+                    
+                    // For demonstration, we'll just go to a placeholder poll page
+                    window.location.href = 'poll.html'; 
+
+                    // On error:
+                    // loadingIndicator.classList.add('hidden');
+                    // errorMessage.classList.remove('hidden');
+                    // pollCreationCard.classList.remove('hidden');
+
+                }, 1500);
+            });
+
+            updateRemoveButtonVisibility();
+        });
+    </script>
+</body>
+</html>
