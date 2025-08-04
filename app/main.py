@@ -1,13 +1,14 @@
-# app/main.py
-
 import os
 import uuid
 import datetime
+import asyncio
+import json
 from fastapi import FastAPI, Request, HTTPException, status
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from typing import List, Dict, Optional
+from threading import Event
 
 # --- Firebase Admin SDK ---
 import firebase_admin
@@ -36,7 +37,6 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 
 # --- Pydantic Models ---
-
 class PollCreate(BaseModel):
     question: str = Field(..., min_length=3, max_length=200)
     options: List[str] = Field(..., min_items=2, max_items=10)
@@ -49,125 +49,119 @@ class PollResponse(BaseModel):
     created_at: datetime.datetime
     is_expired: bool = False
 
-# New model for returning full poll data including results
 class PollData(PollResponse):
     results: Dict[str, int]
-    user_voted: Optional[str] = None # Which option the user voted for, if any
+    user_voted: Optional[str] = None
 
-# New model for handling a vote request
 class VoteRequest(BaseModel):
     option_id: str
 
 
 # --- Helper Functions ---
-
 def get_client_ip(request: Request) -> str:
-    """Gets the client's IP address from the request headers."""
-    # In a production environment with a reverse proxy (like Nginx),
-    # the IP is often in the 'X-Forwarded-For' header.
     x_forwarded_for = request.headers.get('x-forwarded-for')
     if x_forwarded_for:
-        # The header can contain a comma-separated list of IPs.
-        # The client's IP is typically the first one.
-        ip = x_forwarded_for.split(',')[0]
-    else:
-        # Fallback to the direct client IP.
-        ip = request.client.host
-    return ip
+        return x_forwarded_for.split(',')[0]
+    return request.client.host
 
 # --- API Endpoints ---
 
 @app.post("/api/polls", response_model=PollResponse, status_code=status.HTTP_201_CREATED, tags=["Polls"])
 async def create_poll(poll_data: PollCreate):
-    """Creates a new poll and stores it in Firestore."""
-    if not db:
-        raise HTTPException(status_code=503, detail="Firestore service is not available.")
-
+    if not db: raise HTTPException(status_code=503, detail="Firestore service is not available.")
     poll_id = str(uuid.uuid4())[:8]
     options_with_ids = [{"id": f"opt_{i+1}", "text": text} for i, text in enumerate(poll_data.options)]
     results = {option["id"]: 0 for option in options_with_ids}
-
     poll_record = {
-        "id": poll_id,
-        "question": poll_data.question,
-        "options": options_with_ids,
+        "id": poll_id, "question": poll_data.question, "options": options_with_ids,
         "created_at": datetime.datetime.now(datetime.timezone.utc),
-        "expiry_duration": poll_data.expiry,
-        "results": results,
-        "voter_ips": []
+        "expiry_duration": poll_data.expiry, "results": results, "voter_ips": []
     }
-
     try:
         db.collection('polls').document(poll_id).set(poll_record)
         return PollResponse(**poll_record)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create poll: {e}")
 
-
 @app.get("/api/polls/{poll_id}", response_model=PollData, tags=["Polls"])
 async def get_poll_data(poll_id: str, request: Request):
-    """Retrieves data for a specific poll, including results."""
-    if not db:
-        raise HTTPException(status_code=503, detail="Firestore service is not available.")
-    
+    if not db: raise HTTPException(status_code=503, detail="Firestore service is not available.")
     poll_ref = db.collection('polls').document(poll_id)
     poll_doc = poll_ref.get()
-
-    if not poll_doc.exists:
-        raise HTTPException(status_code=404, detail="Poll not found")
-
+    if not poll_doc.exists: raise HTTPException(status_code=404, detail="Poll not found")
     poll_data = poll_doc.to_dict()
     client_ip = get_client_ip(request)
-
-    # Check if the current user's IP has already voted
     if client_ip in poll_data.get("voter_ips", []):
-        poll_data["user_voted"] = "yes" # A simple flag is enough for now
-
+        poll_data["user_voted"] = "yes"
     return PollData(**poll_data)
-
 
 @app.post("/api/polls/{poll_id}/vote", status_code=status.HTTP_200_OK, tags=["Polls"])
 async def cast_vote(poll_id: str, vote: VoteRequest, request: Request):
-    """Casts a vote on a poll."""
-    if not db:
-        raise HTTPException(status_code=503, detail="Firestore service is not available.")
-
+    if not db: raise HTTPException(status_code=503, detail="Firestore service is not available.")
     poll_ref = db.collection('polls').document(poll_id)
     client_ip = get_client_ip(request)
-
     @firestore.transactional
     def vote_transaction(transaction, poll_ref, option_id, client_ip):
         snapshot = poll_ref.get(transaction=transaction)
-        if not snapshot.exists:
-            raise HTTPException(status_code=404, detail="Poll not found")
-
+        if not snapshot.exists: raise HTTPException(status_code=404, detail="Poll not found")
         poll_data = snapshot.to_dict()
-
-        # Check if IP has already voted
-        if client_ip in poll_data.get("voter_ips", []):
-            # This won't raise an error, but simply won't update.
-            # The client-side will handle the UI.
-            return {"message": "You have already voted."}
-        
-        # Check if the voted option is valid
-        if option_id not in poll_data.get("results", {}):
-            raise HTTPException(status_code=400, detail="Invalid option ID")
-
-        # Update the vote count and add the IP
+        if client_ip in poll_data.get("voter_ips", []): return {"message": "You have already voted."}
+        if option_id not in poll_data.get("results", {}): raise HTTPException(status_code=400, detail="Invalid option ID")
         transaction.update(poll_ref, {
             f'results.{option_id}': firestore.Increment(1),
             'voter_ips': firestore.ArrayUnion([client_ip])
         })
         return {"message": "Vote cast successfully."}
-
     transaction = db.transaction()
-    result = vote_transaction(transaction, poll_ref, vote.option_id, client_ip)
-    return result
+    return vote_transaction(transaction, poll_ref, vote.option_id, client_ip)
+
+# --- NEW: Real-time SSE Endpoint ---
+@app.get("/api/polls/{poll_id}/stream", tags=["Polls"])
+async def stream_poll_results(poll_id: str, request: Request):
+    """Streams poll results in real-time using Server-Sent Events."""
+    if not db: raise HTTPException(status_code=503, detail="Firestore service is not available.")
+
+    # Using an asyncio.Queue to bridge the threaded Firestore listener and the async SSE generator
+    queue = asyncio.Queue()
+    
+    # This Event is used to signal the listener thread to stop
+    stop_event = Event()
+
+    def on_snapshot_callback(doc_snapshot, changes, read_time):
+        """Callback function for Firestore listener."""
+        for doc in doc_snapshot:
+            if doc.exists:
+                # Put the new data into the queue for the SSE stream to send
+                queue.put_nowait(doc.to_dict())
+
+    # Start the Firestore listener in a separate thread
+    poll_ref = db.collection("polls").document(poll_id)
+    listener = poll_ref.on_snapshot(on_snapshot_callback)
+
+    async def event_generator():
+        """Generator function that yields SSE messages."""
+        try:
+            while not await request.is_disconnected():
+                try:
+                    # Wait for new data from the queue
+                    data = await asyncio.wait_for(queue.get(), timeout=30) 
+                    # Convert dict to JSON string for SSE
+                    # The 'default=str' handles datetime objects
+                    json_data = json.dumps(data, default=str)
+                    yield f"data: {json_data}\n\n"
+                except asyncio.TimeoutError:
+                    # Send a comment to keep the connection alive
+                    yield ": keep-alive\n\n"
+        finally:
+            # When the client disconnects, stop the listener
+            print(f"Client disconnected from poll {poll_id}. Cleaning up listener.")
+            listener.unsubscribe()
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 @app.get("/api/health", tags=["Status"])
 async def health_check():
-    """A simple endpoint to check if the API is running."""
     return {"status": "ok", "message": "API is running smoothly"}
 
 # --- Frontend Serving ---
@@ -178,4 +172,3 @@ async def serve_home():
 @app.get("/polls/{poll_id}", response_class=HTMLResponse, tags=["Frontend"])
 async def serve_poll_page(poll_id: str):
     return FileResponse(os.path.join(static_dir, 'poll.html'))
-

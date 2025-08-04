@@ -98,7 +98,7 @@
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', async () => {
+        document.addEventListener('DOMContentLoaded', () => {
             const loadingState = document.getElementById('loading-state');
             const pollContent = document.getElementById('poll-content');
             const errorMessage = document.getElementById('error-message');
@@ -111,6 +111,8 @@
             const copyConfirm = document.getElementById('copy-confirm');
             const pollExpiredMessage = document.getElementById('poll-expired-message');
             const alreadyVotedMessage = document.getElementById('already-voted-message');
+            
+            let userHasVoted = false;
 
             const getPollId = () => {
                 const path = window.location.pathname;
@@ -136,7 +138,7 @@
                     optionButton.className = 'w-full text-left p-4 font-semibold text-lg rounded-lg option-button';
                     optionButton.textContent = option.text;
                     optionButton.dataset.optionId = option.id;
-                    optionButton.disabled = data.user_voted || data.is_expired;
+                    optionButton.disabled = userHasVoted || data.is_expired;
                     optionsList.appendChild(optionButton);
 
                     const resultItem = document.createElement('div');
@@ -152,22 +154,24 @@
                     resultsList.appendChild(resultItem);
                 });
 
-                if (data.user_voted || data.is_expired) {
+                if (userHasVoted || data.is_expired) {
                     resultsSection.classList.remove('hidden');
                     optionsList.classList.add('hidden');
                     if (data.is_expired) pollExpiredMessage.classList.remove('hidden');
-                    if (data.user_voted) alreadyVotedMessage.classList.remove('hidden');
+                    if (userHasVoted) alreadyVotedMessage.classList.remove('hidden');
                 }
             };
 
-            const fetchAndRenderPoll = async () => {
+            const fetchInitialPoll = async () => {
                 try {
                     const response = await fetch(`/api/polls/${pollId}`);
-                    if (!response.ok) {
-                        throw new Error('Poll not found');
-                    }
+                    if (!response.ok) throw new Error('Poll not found');
                     const data = await response.json();
                     
+                    if (data.user_voted) {
+                        userHasVoted = true;
+                    }
+
                     loadingState.classList.add('hidden');
                     pollContent.classList.remove('hidden');
                     renderPoll(data);
@@ -186,16 +190,30 @@
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ option_id: optionId })
                     });
-                    if (!response.ok) {
-                        throw new Error('Vote failed');
-                    }
-                    // Re-fetch the data to show the latest results
-                    await fetchAndRenderPoll();
+                    if (!response.ok) throw new Error('Vote failed');
+                    
+                    userHasVoted = true;
+                    // The SSE stream will handle the UI update automatically.
+                    
                 } catch (err) {
                     console.error("Failed to cast vote:", err);
-                    // Optionally re-enable buttons if vote fails
                     document.querySelectorAll('.option-button').forEach(btn => btn.disabled = false);
                 }
+            };
+
+            const setupSSE = () => {
+                const eventSource = new EventSource(`/api/polls/${pollId}/stream`);
+                
+                eventSource.onmessage = (event) => {
+                    console.log("SSE message received:", event.data);
+                    const data = JSON.parse(event.data);
+                    renderPoll(data);
+                };
+
+                eventSource.onerror = (err) => {
+                    console.error("EventSource failed:", err);
+                    eventSource.close();
+                };
             };
 
             optionsList.addEventListener('click', (e) => {
@@ -205,15 +223,17 @@
             });
 
             shareBtn.addEventListener('click', () => {
-                const url = window.location.href;
-                navigator.clipboard.writeText(url).then(() => {
+                navigator.clipboard.writeText(window.location.href).then(() => {
                     copyConfirm.classList.remove('opacity-0');
                     setTimeout(() => copyConfirm.classList.add('opacity-0'), 2000);
-                }).catch(err => console.error('Failed to copy: ', err));
+                });
             });
 
-            // Initial load
-            await fetchAndRenderPoll();
+            // --- Initial Load ---
+            fetchInitialPoll().then(() => {
+                // Connect to the SSE stream after the initial data is loaded
+                setupSSE();
+            });
         });
     </script>
 </body>
