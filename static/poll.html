@@ -91,7 +91,6 @@
             const waitingForResultsMessage = document.getElementById('waiting-for-results');
             const exportBtnLink = document.getElementById('export-btn-link');
             
-            // --- The user's browser is now the ONLY source of truth for the UI ---
             let userHasVoted = false; 
             const getPollId = () => {
                 const path = window.location.pathname;
@@ -101,7 +100,6 @@
             const pollId = getPollId();
             exportBtnLink.href = `/api/polls/${pollId}/export`;
 
-            // This function ONLY checks the user's own browser storage.
             const checkLocalStorage = () => {
                 try {
                     const votedPolls = JSON.parse(localStorage.getItem('quickpoll_voted')) || {};
@@ -137,7 +135,6 @@
                 const showResults = !data.quiz_mode || data.results_revealed;
                 [waitingForResultsMessage, pollExpiredMessage, alreadyVotedMessage].forEach(el => el.classList.add('hidden'));
                 
-                // This logic is now driven ONLY by the `userHasVoted` variable from localStorage
                 if (userHasVoted || data.is_expired) {
                     optionsList.classList.add('hidden');
                     if (showResults) {
@@ -163,8 +160,10 @@
                     if (!response.ok) throw new Error('Poll not found');
                     const data = await response.json();
                     
-                    // The server's `user_voted` field is now ignored for UI control.
-                    // We only rely on our localStorage check.
+                    // --- DEFINITIVE FIX ---
+                    // The server's opinion on whether we have voted (`data.user_voted`)
+                    // is now completely ignored for controlling the UI.
+                    // Only the `userHasVoted` variable, set by `checkLocalStorage`, matters.
                     
                     loadingState.classList.add('hidden');
                     pollContent.classList.remove('hidden');
@@ -176,7 +175,7 @@
             };
 
             const handleVote = async (optionId) => {
-                // --- UPDATED: Optimistically update the UI immediately ---
+                // Set the local state immediately. This is an "optimistic update".
                 userHasVoted = true;
                 try {
                     const votedPolls = JSON.parse(localStorage.getItem('quickpoll_voted')) || {};
@@ -184,18 +183,17 @@
                     localStorage.setItem('quickpoll_voted', JSON.stringify(votedPolls));
                 } catch(e) { console.error("Could not write to localStorage", e); }
                 
-                // Re-render the UI immediately based on the new `userHasVoted` state
-                // This will hide the buttons and show the correct status message instantly.
+                // Re-render the UI instantly based on the new local state.
                 const tempPollData = {
                     question: pollQuestion.textContent,
                     options: Array.from(optionsList.children).map(btn => ({ id: btn.dataset.optionId, text: btn.textContent })),
-                    results: {}, // We don't have results yet, SSE will provide them
-                    quiz_mode: document.getElementById('waiting-for-results').classList.contains('hidden') ? false : true,
+                    results: {},
+                    quiz_mode: !document.getElementById('waiting-for-results').classList.contains('hidden'),
                     results_revealed: false
                 };
                 renderPoll(tempPollData);
 
-                // Send the vote to the server in the background
+                // Send the vote to the server in the background for its IP check.
                 try {
                     const response = await fetch(`/api/polls/${pollId}/vote`, {
                         method: 'POST',
@@ -203,9 +201,7 @@
                         body: JSON.stringify({ option_id: optionId })
                     });
                     if (!response.ok) {
-                        // The vote failed on the backend, but the UI already shows "voted".
-                        // This is acceptable as it prevents user confusion. The IP check worked.
-                        console.warn("Backend rejected the vote, likely due to IP check.");
+                        console.warn("Backend rejected the vote, likely due to IP check. UI is unaffected.");
                     }
                 } catch (err) {
                     console.error("Error sending vote to server:", err);
@@ -234,7 +230,7 @@
                 });
             });
 
-            // --- Main execution flow ---
+            // Main execution flow: Check local browser first, then fetch data.
             checkLocalStorage();
             fetchInitialPoll().then(() => setupSSE());
         });
