@@ -160,11 +160,6 @@
                     if (!response.ok) throw new Error('Poll not found');
                     const data = await response.json();
                     
-                    // --- DEFINITIVE FIX ---
-                    // The server's opinion on whether we have voted (`data.user_voted`)
-                    // is now completely ignored for controlling the UI.
-                    // Only the `userHasVoted` variable, set by `checkLocalStorage`, matters.
-                    
                     loadingState.classList.add('hidden');
                     pollContent.classList.remove('hidden');
                     renderPoll(data);
@@ -175,7 +170,6 @@
             };
 
             const handleVote = async (optionId) => {
-                // Set the local state immediately. This is an "optimistic update".
                 userHasVoted = true;
                 try {
                     const votedPolls = JSON.parse(localStorage.getItem('quickpoll_voted')) || {};
@@ -183,7 +177,6 @@
                     localStorage.setItem('quickpoll_voted', JSON.stringify(votedPolls));
                 } catch(e) { console.error("Could not write to localStorage", e); }
                 
-                // Re-render the UI instantly based on the new local state.
                 const tempPollData = {
                     question: pollQuestion.textContent,
                     options: Array.from(optionsList.children).map(btn => ({ id: btn.dataset.optionId, text: btn.textContent })),
@@ -193,7 +186,6 @@
                 };
                 renderPoll(tempPollData);
 
-                // Send the vote to the server in the background for its IP check.
                 try {
                     const response = await fetch(`/api/polls/${pollId}/vote`, {
                         method: 'POST',
@@ -230,7 +222,6 @@
                 });
             });
 
-            // Main execution flow: Check local browser first, then fetch data.
             checkLocalStorage();
             fetchInitialPoll().then(() => setupSSE());
         });

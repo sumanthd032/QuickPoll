@@ -11,7 +11,7 @@ import secrets
 from fastapi import FastAPI, Request, HTTPException, status
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pantic import BaseModel, Field
 from typing import List, Dict, Optional
 from threading import Event
 
@@ -55,7 +55,6 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 static_dir = os.path.join(current_dir, '..', 'static')
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
-# --- Pydantic Models ---
 class PollCreate(BaseModel):
     question: str = Field(..., min_length=3, max_length=200)
     options: List[str] = Field(..., min_items=2, max_items=10)
@@ -85,34 +84,15 @@ class VoteRequest(BaseModel):
 class HostActionRequest(BaseModel):
     host_secret: str
 
-# --- Helper Functions ---
 def get_client_ip(request: Request) -> str:
-    """
-    Gets the client's real IP address, prioritizing Vercel's specific header.
-    Includes extensive logging to help debug IP issues.
-    """
     headers = request.headers
-    print("--- DEBUG: Incoming Headers ---")
-    for key, value in headers.items():
-        print(f"{key}: {value}")
-    
-    # Vercel provides the user's IP in this header
     vercel_ip = headers.get("x-vercel-forwarded-for")
     if vercel_ip:
-        print(f"--- DEBUG: Found Vercel IP: {vercel_ip} ---")
         return vercel_ip
-    
-    # Fallback for standard reverse proxies
     x_forwarded_for = headers.get('x-forwarded-for')
     if x_forwarded_for:
-        ip = x_forwarded_for.split(',')[0]
-        print(f"--- DEBUG: Found X-Forwarded-For IP: {ip} ---")
-        return ip
-    
-    # Fallback for direct connection (local development)
-    client_host = request.client.host
-    print(f"--- DEBUG: Using fallback client.host IP: {client_host} ---")
-    return client_host
+        return x_forwarded_for.split(',')[0]
+    return request.client.host
 
 def is_poll_expired(poll_data: dict) -> bool:
     duration_str = poll_data.get("expiry_duration")
@@ -129,8 +109,6 @@ def is_poll_expired(poll_data: dict) -> bool:
     if delta: return datetime.datetime.now(datetime.timezone.utc) > created_at + delta
     return False
 
-# --- (The rest of the file is unchanged) ---
-# --- API Endpoints ---
 @app.post("/api/polls", response_model=PollCreateResponse, status_code=status.HTTP_201_CREATED, tags=["Polls"])
 async def create_poll(poll_data: PollCreate):
     if not db: raise HTTPException(status_code=503, detail="Firestore service is not available.")
@@ -141,7 +119,8 @@ async def create_poll(poll_data: PollCreate):
         "id": poll_id, "question": poll_data.question, "options": options_with_ids,
         "created_at": datetime.datetime.now(datetime.timezone.utc),
         "expiry_duration": poll_data.expiry, "results": results, "voter_ips": [],
-        "quiz_mode": poll_data.quiz_mode, "results_revealed": not poll_data.quiz_mode,
+        "quiz_mode": poll_data.quiz_mode, 
+        "results_revealed": not poll_data.quiz_mode, # BUG FIX: Results are revealed by default if not in quiz mode
         "host_secret": secrets.token_urlsafe(16) if poll_data.quiz_mode else None
     }
     try:
@@ -240,7 +219,6 @@ async def export_poll_results(poll_id: str):
     output.seek(0)
     return StreamingResponse(output, media_type="text/csv", headers={"Content-Disposition": f"attachment; filename=poll_results_{poll_id}.csv"})
 
-# --- Frontend Serving ---
 @app.get("/", response_class=HTMLResponse, tags=["Frontend"])
 async def serve_home(): return FileResponse(os.path.join(static_dir, 'index.html'))
 
