@@ -11,7 +11,8 @@ import secrets
 from fastapi import FastAPI, Request, HTTPException, status
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pantic import BaseModel, Field
+# --- BUG FIX: Corrected typo from 'pantic' to 'pydantic' ---
+from pydantic import BaseModel, Field
 from typing import List, Dict, Optional
 from threading import Event
 
@@ -27,6 +28,8 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# --- Firebase Initialization ---
+db = None
 try:
     private_key = os.getenv("FIREBASE_PRIVATE_KEY", "").replace('\\n', '\n')
     cred_dict = {
@@ -41,16 +44,21 @@ try:
         "auth_provider_x509_cert_url": os.getenv("FIREBASE_AUTH_PROVIDER_X509_CERT_URL"),
         "client_x509_cert_url": os.getenv("FIREBASE_CLIENT_X509_CERT_URL")
     }
-    if not all(cred_dict.values()):
-         raise ValueError("One or more Firebase environment variables are not set.")
-    cred = credentials.Certificate(cred_dict)
-    firebase_admin.initialize_app(cred)
-    db = firestore.client()
-    print("✅ Firestore connection successful.")
+    
+    # IMPROVEMENT: Check for essential keys before initializing
+    if cred_dict.get("project_id") and cred_dict.get("private_key") and cred_dict.get("client_email"):
+        cred = credentials.Certificate(cred_dict)
+        firebase_admin.initialize_app(cred)
+        db = firestore.client()
+        print("✅ Firestore connection successful.")
+    else:
+        print("🔥 Firebase environment variables not fully set. Firestore is disabled.")
+
 except Exception as e:
     print(f"🔥 Firestore connection failed: {e}")
-    db = None
+    db = None # Ensure db is None on failure
 
+# --- Static Files ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
 static_dir = os.path.join(current_dir, '..', 'static')
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
@@ -87,11 +95,9 @@ class HostActionRequest(BaseModel):
 def get_client_ip(request: Request) -> str:
     headers = request.headers
     vercel_ip = headers.get("x-vercel-forwarded-for")
-    if vercel_ip:
-        return vercel_ip
+    if vercel_ip: return vercel_ip
     x_forwarded_for = headers.get('x-forwarded-for')
-    if x_forwarded_for:
-        return x_forwarded_for.split(',')[0]
+    if x_forwarded_for: return x_forwarded_for.split(',')[0]
     return request.client.host
 
 def is_poll_expired(poll_data: dict) -> bool:
@@ -120,7 +126,7 @@ async def create_poll(poll_data: PollCreate):
         "created_at": datetime.datetime.now(datetime.timezone.utc),
         "expiry_duration": poll_data.expiry, "results": results, "voter_ips": [],
         "quiz_mode": poll_data.quiz_mode, 
-        "results_revealed": not poll_data.quiz_mode, # BUG FIX: Results are revealed by default if not in quiz mode
+        "results_revealed": not poll_data.quiz_mode,
         "host_secret": secrets.token_urlsafe(16) if poll_data.quiz_mode else None
     }
     try:
