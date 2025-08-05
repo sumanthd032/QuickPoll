@@ -15,25 +15,18 @@ from pydantic import BaseModel, Field
 from typing import List, Dict, Optional
 from threading import Event
 
-# --- NEW: Import dotenv ---
 from dotenv import load_dotenv
-
-# --- Firebase Admin SDK ---
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-# --- Load Environment Variables ---
-# This will load the variables from your .env file for local development
 load_dotenv()
 
-# --- App Configuration ---
 app = FastAPI(
     title="QuickPoll API",
     description="Backend API for the QuickPoll application.",
     version="1.0.0"
 )
 
-# --- Firebase Initialization ---
 try:
     private_key = os.getenv("FIREBASE_PRIVATE_KEY", "").replace('\\n', '\n')
     cred_dict = {
@@ -49,20 +42,18 @@ try:
         "client_x509_cert_url": os.getenv("FIREBASE_CLIENT_X509_CERT_URL")
     }
     if not all(cred_dict.values()):
-         raise ValueError("One or more Firebase environment variables are not set. Please check your .env file or hosting configuration.")
+         raise ValueError("One or more Firebase environment variables are not set.")
     cred = credentials.Certificate(cred_dict)
     firebase_admin.initialize_app(cred)
     db = firestore.client()
-    print("✅ Firestore connection successful from environment variables.")
+    print("✅ Firestore connection successful.")
 except Exception as e:
     print(f"🔥 Firestore connection failed: {e}")
     db = None
 
-# --- Static Files ---
 current_dir = os.path.dirname(os.path.abspath(__file__))
 static_dir = os.path.join(current_dir, '..', 'static')
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
-
 
 # --- Pydantic Models ---
 class PollCreate(BaseModel):
@@ -95,23 +86,33 @@ class HostActionRequest(BaseModel):
     host_secret: str
 
 # --- Helper Functions ---
-# --- UPDATED: IP Address Logic for Vercel ---
 def get_client_ip(request: Request) -> str:
     """
     Gets the client's real IP address, prioritizing Vercel's specific header.
+    Includes extensive logging to help debug IP issues.
     """
+    headers = request.headers
+    print("--- DEBUG: Incoming Headers ---")
+    for key, value in headers.items():
+        print(f"{key}: {value}")
+    
     # Vercel provides the user's IP in this header
-    vercel_ip = request.headers.get("x-vercel-forwarded-for")
+    vercel_ip = headers.get("x-vercel-forwarded-for")
     if vercel_ip:
+        print(f"--- DEBUG: Found Vercel IP: {vercel_ip} ---")
         return vercel_ip
     
     # Fallback for standard reverse proxies
-    x_forwarded_for = request.headers.get('x-forwarded-for')
+    x_forwarded_for = headers.get('x-forwarded-for')
     if x_forwarded_for:
-        return x_forwarded_for.split(',')[0]
+        ip = x_forwarded_for.split(',')[0]
+        print(f"--- DEBUG: Found X-Forwarded-For IP: {ip} ---")
+        return ip
     
     # Fallback for direct connection (local development)
-    return request.client.host
+    client_host = request.client.host
+    print(f"--- DEBUG: Using fallback client.host IP: {client_host} ---")
+    return client_host
 
 def is_poll_expired(poll_data: dict) -> bool:
     duration_str = poll_data.get("expiry_duration")
@@ -129,7 +130,6 @@ def is_poll_expired(poll_data: dict) -> bool:
     return False
 
 # --- (The rest of the file is unchanged) ---
-
 # --- API Endpoints ---
 @app.post("/api/polls", response_model=PollCreateResponse, status_code=status.HTTP_201_CREATED, tags=["Polls"])
 async def create_poll(poll_data: PollCreate):
