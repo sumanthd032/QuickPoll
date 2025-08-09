@@ -5,7 +5,6 @@
 ![Python 3.10+](https://img.shields.io/badge/Python%203.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)
 ![HTML5](https://img.shields.io/badge/HTML5-E34F26?style=for-the-badge&logo=html5&logoColor=white)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)
-![JavaScript ES6+](https://img.shields.io/badge/JavaScript%20ES6%2B-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)
 
 
 QuickPoll is a real-time, one-question polling application designed for simplicity and speed. It allows users to instantly create a poll, share a unique link, and see the results update live as votes are cast. It's built with a modern Python backend using FastAPI and a lightweight vanilla JavaScript frontend.
